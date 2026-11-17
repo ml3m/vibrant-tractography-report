@@ -29,9 +29,13 @@
     bottom=4pt
 }
 
-\title{\vspace{-1.2cm}\textbf{\Large Project Scoping Document (Week 2): Vibrant Tractography Pipeline}\\[0.2em]
+\title{\vspace{-1.2cm}\textbf{\Large Project Scoping Document: Vibrant Tractography Pipeline}\\[0.2em]
 \textbf{\large TRX-Driven Variable Tube Thickness (Rounded Cones), Opacity, and Color}}
-\author{\textbf{Team 3} (3 Students) \quad | \quad MSc Visual Computing}
+
+\author{\textbf{Group 7B}\\[0.3em]
+Vlas S. Ifju \quad | \quad Radu P. Anghel \quad | \quad Mircea Simu\\[0.2em]
+}
+
 \date{Academic Year 2026/2027}
 
 \begin{document}
@@ -107,7 +111,7 @@ We integrate the modern \textbf{TRX format} \cite{trxformat} to load streamline 
 \centering
 \texttt{.trx} (via \texttt{trx-rs}) \quad / \quad \texttt{.tck} + \texttt{.tsf} \quad / \quad Synthetic Test Tracts\\
 $\downarrow$\\
-\textbf{Unified Tractogram (Rust):} Positions, Offsets, \texttt{dpv}/\texttt{dps} Tables\\
+\textbf{Unified Tractogram (Rust)}\\
 $\Big\downarrow$ \emph{Interactive Mapping Layer (\texttt{egui}): Radius $[r_{\min}, r_{\max}]$, Opacity $\alpha$, Color}\\
 \textbf{GPU Buffer Streaming:} Packed Vertex Buffer $(\mathbf{p}, r_v, \alpha_v)$\\
 $\swarrow$ \hspace{4.2cm} $\searrow$\\
@@ -115,7 +119,9 @@ $\swarrow$ \hspace{4.2cm} $\searrow$\\
 \end{tcolorbox}
 \end{center}
 
+\newpage
 \noindent \textbf{Mathematical Formulation (Gro\ss{} \& Gumhold \cite{gross2021advanced}):}
+
 A streamline segment is defined by start position $\mathbf{x}_1$ with radius $r_1$ and end position $\mathbf{x}_2$ with radius $r_2$. The segment centerline direction is $\mathbf{d} = \mathbf{x}_2 - \mathbf{x}_1$, with segment length $L = \|\mathbf{d}\|$. The half opening angle $\alpha$ of the conical frustum is defined by:
 \begin{equation}
 \sin \alpha = \frac{r_1 - r_2}{L}
