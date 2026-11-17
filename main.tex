@@ -77,14 +77,14 @@ We integrate the modern \textbf{TRX format} \cite{trxformat} to load streamline 
 \toprule
 \textbf{Tier} & \textbf{Feature} & \textbf{Technical Scope} & \textbf{Acceptance Criteria} \\
 \midrule
-\textbf{Core} & \textbf{R1: TRX Ingestion (\texttt{trx-rs})} & Ingest \texttt{.trx} files (geometry + \texttt{dpv}/\texttt{dps} tables) into a unified Tractogram model (preserving \texttt{.tck}/\texttt{.tsf} compatibility). & Loads official benchmark bundles (AF, CST) and extracts attributes. \\
-\textbf{Core} & \textbf{R2: Rounded Cones (WGSL)} & Ray-cast truncated cones with spherical endcaps ($\mathbf{x}_1, r_1 \to \mathbf{x}_2, r_2$) with analytical surface normals and junction clipping planes $\vec{n}_0, \vec{n}_1$. & Crack-free joints without interior overlap artifacts; valid PBR highlights. \\
-\textbf{Core} & \textbf{R3: Radius-Aware Voxel Grid} & Extend \texttt{voxelize.wgsl} bounding slabs to $r_{\max} = \max(r_1, r_2)$ within the voxel acceleration grid. & Zero ray-leak holes during continuous 3D camera rotation at 100k lines. \\
-\textbf{Core} & \textbf{R4: Interactive Mapping UI} & Immediate-mode \texttt{egui} panel mapping scalar attributes to physical radius $[r_{\min}, r_{\max}]$ in mm. & Real-time update ($< 16\,\text{ms}$) on slider drag without geometry re-upload. \\
+\textbf{Must} & \textbf{R1: TRX Ingestion (\texttt{trx-rs})} & Ingest \texttt{.trx} files (geometry + \texttt{dpv}/\texttt{dps} tables) into a unified Tractogram model (preserving \texttt{.tck}/\texttt{.tsf} compatibility). & Loads official benchmark bundles (AF, CST) and extracts attributes. \\
+\textbf{Must} & \textbf{R2: Rounded Cones (WGSL)} & Ray-cast truncated cones with spherical endcaps ($\mathbf{x}_1, r_1 \to \mathbf{x}_2, r_2$) with analytical surface normals and junction clipping planes $\vec{n}_0, \vec{n}_1$. & Crack-free joints without interior overlap artifacts; valid PBR highlights. \\
+\textbf{Must} & \textbf{R3: Radius-Aware Voxel Grid} & Extend \texttt{voxelize.wgsl} bounding slabs to $r_{\max} = \max(r_1, r_2)$ within the voxel acceleration grid. & Zero ray-leak holes during continuous 3D camera rotation at 100k lines. \\
+\textbf{Must} & \textbf{R4: Interactive Mapping UI} & Immediate-mode \texttt{egui} panel mapping scalar attributes to physical radius $[r_{\min}, r_{\max}]$ in mm. & Real-time update ($< 16\,\text{ms}$) on slider drag without geometry re-upload. \\
 \midrule
-\textbf{Extension} & \textbf{E1: Varying Opacity} & Map confidence scalars to stochastic transparency/thresholding. & Low-confidence fibers fade smoothly; interactive de-cluttering. \\
-\textbf{Extension} & \textbf{E2: Varying Color} & Route scalar attributes through custom colormaps or RGB tables. & Multi-attribute visual distinction across tract bundles. \\
-\textbf{Extension} & \textbf{E3: Tip Tapering} & Procedural tapering of streamline endpoints toward zero radius at cortex. & Anatomically natural tract bundle terminations. \\
+\textbf{Should} & \textbf{E1: Varying Opacity} & Map confidence scalars to stochastic transparency/thresholding. & Low-confidence fibers fade smoothly; interactive de-cluttering. \\
+\textbf{Should} & \textbf{E2: Varying Color} & Route scalar attributes through custom colormaps or RGB tables. & Multi-attribute visual distinction across tract bundles. \\
+\textbf{Should} & \textbf{E3: Tip Tapering} & Procedural tapering of streamline endpoints toward zero radius at cortex. & Anatomically natural tract bundle terminations. \\
 \bottomrule
 \end{tabularx}
 \caption{Project requirements and concrete acceptance criteria structured by core deliverables and extensions.}
