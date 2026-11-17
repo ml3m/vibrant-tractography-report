@@ -33,8 +33,8 @@
 }
 
 \title{\vspace{-1.0cm}\textbf{\LARGE Visual Computing Project: Scoping Document}\\[0.3em]
-\textbf{\Large Dynamic Multi-Attribute Tractography in Vibrant:}\\[0.2em]
-\textbf{\large Analytically Ray-Traced Tapered Cones, TRX Integration, and Interactive Visual Mapping}}
+\textbf{\Large TRX-Driven Multi-Attribute Tractography in Vibrant:}\\[0.2em]
+\textbf{\large Varying Tube Thickness (Rounded Cones), Opacity, and Color Mapping}}
 \author{\textbf{Team 3} \quad | \quad MSc Visual Computing}
 \date{Week 2 Milestone \quad | \quad Academic Year 2026/2027}
 
@@ -43,21 +43,21 @@
 \maketitle
 
 \begin{tcolorbox}
-\textbf{Executive Summary:} Vibrant is a modern WebGPU/Rust tool that renders brain tractography using voxel-accelerated ray tracing. However, Vibrant currently draws all streamlines as uniform capsules of fixed radius ($r = \text{const}$), creating visual clutter and preventing quantitative data encoding. In this 8-week project, our team of three will upgrade Vibrant's rendering and data pipeline by:
+\textbf{Executive Summary:} Vibrant is an open-source visual computing tool for 3D brain anatomy and tractography that renders streamlines via voxel-accelerated ray tracing (Kraaijeveld et al.). In its current version, Vibrant only loads legacy \texttt{.tck} files and draws all streamlines as uniform capsules of fixed radius ($r = \text{const}$) and constant opacity, causing severe visual clutter and preventing quantitative data encoding. In this 8-week project, our team of three will implement the core tractography pipeline upgrade:
 \begin{enumerate}[nosep]
-    \item Replacing fixed-radius cylinders with \textbf{analytically ray-traced tapered cones} (Gro\ss{} \& Gumhold, 2021) in WGSL.
-    \item Integrating the community \textbf{TRX format} (`trx-rs`) to ingest per-vertex and per-streamline biological scalars.
-    \item Providing an \textbf{interactive transfer function UI} in `egui` allowing dynamic radius and opacity modulation, with GPU-accelerated 3D NIfTI volume sampling as an advanced stretch goal.
+    \item \textbf{TRX Support \& In-Memory Model:} Ingest the community \texttt{.trx} format (via \texttt{trx-rs}) alongside legacy \texttt{.tck}/\texttt{.tsf} files into a unified in-memory Tractogram data model.
+    \item \textbf{Varying Tube Thickness (Rounded Cones):} Ray-trace truncated cones with spherical end caps (Gro\ss{} \& Gumhold, 2021) in WGSL so streamline radii vary continuously per-vertex or per-streamline.
+    \item \textbf{Varying Opacity \& Color Mapping:} Modulate streamline opacity and colormapping driven by quantitative attributes (e.g., SIFT2 bundle weights, FA) through an interactive \texttt{egui} transfer interface.
 \end{enumerate}
 \end{tcolorbox}
 
 \vspace{-0.2cm}
-\section{Motivation and Problem Statement}
+\section{Motivation and Context}
 \label{sec:motivation}
 
-Diffusion MRI tractography reconstructs white-matter axon bundles as 3D trajectories called \emph{streamlines}. In clinical planning (e.g., neurosurgical tumor resection) and neuroscience, a single tractogram contains $100{,}000$ to $1{,}000{,}000$ polylines. Vibrant \cite{kraaijeveld2024voxel} accelerates streamline rendering using a coarse voxel grid and ray-capsule intersections.
+Diffusion MRI tractography reconstructs white-matter pathways as thousands of polylines called \emph{streamlines}. In clinical neurosurgery planning and research, tractograms contain between $50{,}000$ and several hundred thousand streamlines. Vibrant \cite{kraaijeveld2024voxel} renders these efficiently using a coarse voxel grid and ray-capsule intersections.
 
-\begin{figure}[h!]
+\begin{figure}[ht!]
     \centering
     \begin{subfigure}[b]{0.48\textwidth}
         \centering
@@ -69,25 +69,27 @@ Diffusion MRI tractography reconstructs white-matter axon bundles as 3D trajecto
     \begin{subfigure}[b]{0.48\textwidth}
         \centering
         \includegraphics[width=\textwidth]{figures/hero.png}
-        \caption{Whole-brain tractography: High fiber density causes severe visual occlusion and depth ambiguity.}
+        \caption{Whole-brain tractography: Uniform thickness creates visual clutter, occluding deep anatomical pathways.}
         \label{fig:hero}
     \end{subfigure}
-    \caption{Current baseline tractography in Vibrant. All streamlines share a single global radius parameter.}
+    \caption{Baseline tractography rendering in Vibrant. All streamlines share a single global radius and opacity.}
     \label{fig:baseline}
 \end{figure}
 
-\noindent Despite its real-time performance and physically based lighting, Vibrant suffers from two critical limitations:
-\begin{enumerate}[leftmargin=*]
-    \item \textbf{Geometric Uniformity and Perceptual Occlusion:} Every streamline segment is forced to have an identical radius (controlled by a single global slider). Biological pathways vary widely in bundle volume and streamline confidence; rendering them uniformly causes intense ``spaghetti clutter'', obscuring deep structures and thin fascicles.
-    \item \textbf{Decoupled Attribute Pipeline:} Vibrant currently only loads legacy `.tck` files and single `.tsf` scalar files for colormaps. Multi-attribute standards like TRX \cite{trxformat} (which store bundle weights from SIFT2 \cite{smith2015sift2}, local curvature, and group labels) are unsupported. Furthermore, streamlines cannot interactively sample underlying 3D MRI volumes without external preprocessing.
-\end{enumerate}
+\noindent \textbf{The Core Problem:} In the current codebase, streamline segments are strictly drawn with a single global radius and uniform opacity. Biological pathways, however, carry critical quantitative parameters:
+\begin{itemize}[leftmargin=*,nosep]
+    \item \textbf{Per-vertex data (\texttt{dpv}):} Fractional anisotropy (FA), mean diffusivity (MD), or local curvature.
+    \item \textbf{Per-streamline data (\texttt{dps}):} SIFT2 streamline weights (biological fiber count) or streamline length.
+    \item \textbf{Per-group data (\texttt{dpg}):} Anatomical bundle assignments and group statistics.
+\end{itemize}
+Because Vibrant lacks support for the modern \textbf{TRX community format} \cite{trxformat}, these rich scalar attributes cannot be loaded together with the geometry. Furthermore, fixed-radius rendering causes dense fiber bundles to form opaque, impenetrable walls, obscuring thin adjacent tracts.
 
-\section{Project Requirements and Prioritization (MoSCoW)}
+\section{Project Objectives and MoSCoW Prioritization}
 \label{sec:requirements}
 
-To ensure high visual impact while maintaining feasibility over 8 weeks, requirements are structured using the MoSCoW framework (\Cref{tab:requirements}).
+We follow the exact proposed project progression: \textbf{TRX support first} to unlock the attribute data model, which then feeds the \textbf{varying radius}, \textbf{varying opacity}, and \textbf{varying color} channels (\Cref{tab:requirements}).
 
-\begin{table}[h!]
+\begin{table}[ht!]
 \centering
 \small
 \begin{tabularx}{\textwidth}{l p{5.5cm} X p{3.2cm}}
@@ -96,73 +98,76 @@ To ensure high visual impact while maintaining feasibility over 8 weeks, require
 \midrule
 \multicolumn{4}{l}{\textbf{Must-Have (M) --- Core Project Deliverables}} \\
 \midrule
-\textbf{M1} & Tapered Cone Ray Tracing in WGSL & Implement exact ray intersection for truncated cones with spherical end caps connecting $P_A(r_A)$ to $P_B(r_B)$. & Zero visual seam cracks at vertices; correct tilted normals under PBR lighting. \\
-\textbf{M2} & Radius-Aware Voxel Grid Traversal & Update `voxelize.wgsl` and `occupancy.wgsl` so conservative bounding slabs account for $\max(r_A, r_B)$. & Zero missing segments or traversal holes during interactive rotation at 100k lines. \\
-\textbf{M3} & Multi-Channel GPU Vertex Buffers & Extend GPU buffer streaming to pass per-vertex radii and interpolate radius along hit $t$. & Bandwidth overhead $\le 25\%$ compared to baseline; real-time memory packing. \\
-\textbf{M4} & TRX File Format Ingestion & Integrate `trx-rs` to parse `.trx` archives, populating internal geometry and attribute tables. & Flawlessly loads official TRX reference datasets (AF, CST bundles). \\
-\textbf{M5} & Interactive Radius Mapping UI & Add an `egui` control panel mapping scalar channels to physical radius $[r_{\min}, r_{\max}]$ in mm. & Slider changes update display in $< 16\,\text{ms}$ without re-uploading geometry. \\
+\textbf{M1} & TRX Format Support (\texttt{trx-rs}) & Ingest \texttt{.trx} archives (positions, offsets, \texttt{dpv}, \texttt{dps}) into a unified Tractogram struct while preserving legacy \texttt{.tck}/\texttt{.tsf} support. & Successfully loads HCP benchmark bundles (AF, CST) and parses scalar tables. \\
+\textbf{M2} & Varying Tube Thickness (Cones) & Implement analytical ray-cone intersection with spherical end caps in WGSL (Gro\ss{} \& Gumhold \cite{gross2021advanced}), supporting differing start/end radii ($r_A, r_B$). & Smooth, crack-free tube joints; analytical surface normals reacting to lighting. \\
+\textbf{M3} & Radius-Aware Voxel Grid Safety & Update \texttt{voxelize.wgsl} and \texttt{occupancy.wgsl} to compute conservative bounding slabs using $\max(r_A, r_B)$. & Zero ray-leak holes or missing segments during interactive camera rotation. \\
+\textbf{M4} & GPU Buffer Architecture & Pack streamline positions, radius attributes, and flags into GPU vertex/storage buffers using \texttt{bytemuck}. & Memory bandwidth overhead $\le 25\%$ relative to baseline; seamless streaming. \\
+\textbf{M5} & Interactive Transfer UI (\texttt{egui}) & Provide GUI controls to map attributes (SIFT2 weight, FA) to radius $[r_{\min}, r_{\max}]$ in mm, with real-time range sliders. & Real-time update ($< 16\,\text{ms}$) on slider adjustment without geometry re-upload. \\
 \midrule
-\multicolumn{4}{l}{\textbf{Should-Have (S) --- Visual Enhancements}} \\
+\multicolumn{4}{l}{\textbf{Should-Have (S) --- Visual Clarity \& Filtering}} \\
 \midrule
-\textbf{S1} & Attribute-Driven Opacity Modulation & Allow scalar confidence values (e.g., SIFT2 weights) to scale alpha / transparency or discard noisy fibers. & Low-confidence fibers fade smoothly; interactive thresholding. \\
-\textbf{S2} & Procedural Cortical End-Cap Tapering & Automatically taper streamline tips towards zero radius as they approach cortical endpoints. & Visually organic bundle terminations at grey matter interface. \\
+\textbf{S1} & Varying Opacity Modulation & Map streamline scalar confidence/weight to alpha or stochastic culling threshold. & Low-confidence fibers fade smoothly into ghost lines; solves visual occlusion. \\
+\textbf{S2} & Varying Color (Colormap / RGB) & Route \texttt{dpv}/\texttt{dps} scalar fields through custom colormaps or direct RGB channels. & Multi-channel coloring (e.g. FA or direction-encoded RGB). \\
+\textbf{S3} & Cortical Endpoint Tapering & Procedurally taper streamline tips toward zero radius as they reach cortical gray matter. & Organically tapered fiber endpoints without abrupt cylinder cuts. \\
 \midrule
-\multicolumn{4}{l}{\textbf{Could-Have (C) --- Advanced Stretch Goals}} \\
+\multicolumn{4}{l}{\textbf{Could-Have (C) --- Stretch Goal (Only if Ahead of Schedule)}} \\
 \midrule
-\textbf{C1} & Real-Time GPU 3D Volume Sampling & Sample underlying 3D NIfTI volume textures at vertex coordinates using trilinear interpolation. & Fibers dynamically change color/radius near tumor/lesion masks live. \\
-\textbf{C2} & Interactive 3D ROI Spatial Filtering & Virtual dissection: interactive 3D spherical/box probe isolating intersecting fibers. & Interactive probe drag with instantaneous bundle isolation. \\
+\textbf{C1} & On-the-GPU 3D Volume Sampling & Sample an underlying loaded NIfTI volume at vertex coordinates to dynamically generate a new attribute. & Streamlines dynamically adapt radius/color near 3D tumor or lesion masks. \\
 \midrule
 \multicolumn{4}{l}{\textbf{Won't-Have (W) --- Out of Scope for 8 Weeks}} \\
 \midrule
-\textbf{W1} & In-viewer Streamline Tracking & Generating tractography curves from raw DWI data. & Handled externally by MRtrix3. \\
-\textbf{W2} & Non-Circular Cross-Sections & Elliptical or ribbon-shaped geometric extrusions. & High algebraic complexity with low visual gain. \\
+\textbf{W1} & In-viewer Streamline Tracking & Generating tractography polylines from raw DWI data. & Done externally in MRtrix3. \\
+\textbf{W2} & Non-Circular Cross-Sections & Elliptical or ribbon geometric primitives. & Low visual payoff relative to math complexity. \\
 \bottomrule
 \end{tabularx}
-\caption{MoSCoW prioritized requirements with specific, testable acceptance criteria.}
+\caption{MoSCoW prioritized requirements with testable acceptance criteria.}
 \label{tab:requirements}
 \end{table}
 
 \section{Technical Architecture and Mathematical Formulation}
 \label{sec:technical_plan}
 
-\subsection{Ray-Cone Mathematical Derivation}
-In Vibrant's current shader (`intersect.wgsl`), capsules are cylinders of constant radius $r$. For a tapered cone segment between vertex $\mathbf{p}_A$ with radius $r_A$ and $\mathbf{p}_B$ with radius $r_B$, we adopt the formulation by Gro\ss{} \& Gumhold \cite{gross2021advanced}. Let $\mathbf{d} = \mathbf{p}_B - \mathbf{p}_A$ and $L = \|\mathbf{d}\|$. The cone slant half-angle $\alpha$ satisfies:
+\subsection{TRX Ingestion and Unified Tractogram Model}
+Following Section 3.2 of the project brief, we define a unified in-memory \texttt{Tractogram} representation:
+\begin{itemize}[leftmargin=*,nosep]
+    \item \textbf{Geometry:} Flat positions buffer ($\mathbf{p} \in \mathbb{R}^3$) and streamline start offsets buffer.
+    \item \textbf{Attribute Tables:} Named dictionaries storing per-vertex (\texttt{dpv}) and per-streamline (\texttt{dps}) scalar arrays.
+\end{itemize}
+When loading a \texttt{.trx} file via \texttt{trx-rs}, arrays map one-to-one into this structure. Legacy \texttt{.tck} files supply positions and offsets, while any loaded \texttt{.tsf} file populates a \texttt{dpv} scalar channel.
+
+\subsection{Rounded Cone Ray Intersection Math}
+In Vibrant's current shader (\texttt{intersect.wgsl}), segments are constant-radius capsules. Following Gro\ss{} \& Gumhold \cite{gross2021advanced}, we model each segment as a \textbf{rounded cone}: the tangent envelope between a sphere of radius $r_A$ at $\mathbf{p}_A$ and a sphere of radius $r_B$ at $\mathbf{p}_B$. Let $\mathbf{d} = \mathbf{p}_B - \mathbf{p}_A$ and segment length $L = \|\mathbf{d}\|$. The opening half-angle $\alpha$ satisfies:
 \begin{equation}
     \sin \alpha = \frac{r_A - r_B}{L}, \qquad \cos^2 \alpha = 1 - \sin^2 \alpha
 \end{equation}
-The conical frustum surface is defined by the envelope of a sphere whose center and radius vary linearly along the segment. Given a ray $\mathbf{r}(t) = \mathbf{o} + t \mathbf{v}$, substituting into the implicit cone equation yields a quadratic equation:
-\begin{equation}
-    a t^2 + 2b t + c = 0
-\end{equation}
-where coefficients $a, b, c$ depend on the ray direction, segment axis, and slant angle $\alpha$. The intersection tests:
+Substituting a camera ray $\mathbf{r}(t) = \mathbf{o} + t \mathbf{v}$ into the conical envelope yields a quadratic equation $at^2 + 2bt + c = 0$. The shader evaluates:
 \begin{enumerate}[nosep]
-    \item The roots of the quadratic equation restricted to the frustum bounds $0 \le u \le L$.
-    \item Ray-sphere intersections against the two spherical end caps centered at $\mathbf{p}_A$ (radius $r_A$) and $\mathbf{p}_B$ (radius $r_B$).
+    \item The roots of the conical frustum bounded between the tangent circles on the two spheres.
+    \item Ray-sphere intersection against the two spherical end caps centered at $\mathbf{p}_A$ and $\mathbf{p}_B$.
 \end{enumerate}
-The surface normal $\mathbf{n}$ at hit position $\mathbf{x}$ is tilted by angle $\alpha$ relative to the radial vector, guaranteeing correct shading and specular highlights under Vibrant's ambient occlusion and directional lighting passes.
+The hit normal $\mathbf{n}$ is analytically tilted by $\alpha$ along the segment direction, ensuring physically accurate specular highlights under Vibrant's PBR lighting. An early-out fallback evaluates standard cylinder math when $|r_A - r_B| < 10^{-4}$.
 
-\subsection{Voxel Acceleration Grid Safety}
-Vibrant inserts line segments into a coarse 3D voxel grid to bound ray queries. For a tapered cone, the spatial envelope is strictly bounded by a cylinder capsule of radius $r_{\max} = \max(r_A, r_B)$. In `voxelize.wgsl`, evaluating the conservative slab extent with $r_{\max}$ guarantees that no rays miss intersecting segments while preserving existing prefix-sum and compaction passes without architectural redesign.
-
-\subsection{Data Ingestion Pipeline}
-We adopt the unified internal representation shown in \Cref{fig:pipeline}. The `trx-rs` crate is incorporated into `Cargo.toml`. When loading a `.trx` file, positions and streamline offsets are mapped directly to GPU storage buffers, while per-vertex (`dpv`) and per-streamline (`dps`) arrays are stored in a typed attribute map.
+\subsection{Conservative Voxel Grid Traversal}
+Vibrant accelerates ray queries by voxelizing line segments into a 3D grid. For a rounded cone, the spatial envelope of the segment is strictly bounded by a cylinder capsule of radius $r_{\max} = \max(r_A, r_B)$. In \texttt{voxelize.wgsl}, evaluating the bounding slab with $r_{\max}$ guarantees that the existing prefix-sum and compaction passes remain mathematically conservative without ray-leak holes.
 
 \begin{figure}[ht!]
 \centering
 \begin{tcolorbox}[colback=white,colframe=bordergray]
 \small\centering
-\textbf{Data Ingestion \& Rendering Pipeline}\\[0.5em]
+\textbf{Data Flow Architecture}\\[0.4em]
 \begin{tabular}{c c c}
-\textbf{Data Inputs:} \texttt{.trx} (via \texttt{trx-rs}) & \texttt{.tck} + \texttt{.tsf} & 3D NIfTI Volume \\
+\textbf{Inputs:} \texttt{.trx} (via \texttt{trx-rs}) & \texttt{.tck} + \texttt{.tsf} & Synthetic Test Tracts \\
 \multicolumn{3}{c}{$\downarrow$} \\
-\multicolumn{3}{c}{\textbf{In-Memory Tractogram (Rust):} Geometry + DPV / DPS Tables} \\
-\multicolumn{3}{c}{$\downarrow$ \emph{Interactive Transfer Function (\texttt{egui})}} \\
-\multicolumn{3}{c}{\textbf{GPU Streaming:} Packed Vertex Buffer $(\mathbf{p}, r_v)$ + Uniforms} \\
+\multicolumn{3}{c}{\textbf{In-Memory Tractogram (Rust):} Positions, Offsets, \texttt{dpv}/\texttt{dps} Tables} \\
+\multicolumn{3}{c}{$\downarrow$ \emph{Interactive Mapping Layer (\texttt{egui})}} \\
+\textbf{Radius Channel:} $[r_{\min}, r_{\max}]$ & \textbf{Opacity Channel:} $\alpha$ / Culling & \textbf{Color Channel:} Colormap / RGB \\
+\multicolumn{3}{c}{$\downarrow$} \\
+\multicolumn{3}{c}{\textbf{GPU Streaming:} Packed Vertex Buffer $(\mathbf{p}, r_v, \alpha_v)$ + Uniforms} \\
 $\swarrow$ & & $\searrow$ \\
-\textbf{Voxelization:} Slab bounds $\max(r_A, r_B)$ & & \textbf{Ray Tracing:} Tapered Cones \& Normals
+\textbf{Voxelization Pass (\texttt{voxelize.wgsl}):} Slab $\max(r_A, r_B)$ & & \textbf{Ray Tracing Pass (\texttt{trace.wgsl}):} Rounded Cones
 \end{tabular}
 \end{tcolorbox}
-\caption{System architecture: Decoupled data ingestion, interactive transfer mapping, and GPU ray tracing.}
+\caption{System architecture: Decoupled TRX data ingestion, interactive transfer mapping, and GPU ray tracing.}
 \label{fig:pipeline}
 \end{figure}
 
@@ -176,12 +181,12 @@ $\swarrow$ & & $\searrow$ \\
 \textbf{Week} & \textbf{Phase} & \textbf{Weekly Objectives \& Tasks} & \textbf{Deliverable / Verification} \\
 \midrule
 \textbf{W1} & Setup & Environment validation, build baseline Vibrant, inspect shader pipeline. & Verified 60 FPS baseline build. \\
-\textbf{W2} & Design & Mathematical derivation of cone intersector; scoping document submission. & Verified \LaTeX{} scoping document. \\
-\textbf{W3} & Shaders & Implement \texttt{cone\_intersection} in \texttt{intersect.wgsl} using synthetic radii. & Correct visual render on test helix. \\
-\textbf{W4} & Voxel Grid & Update \texttt{voxelize.wgsl} and \texttt{occupancy.wgsl} for $\max(r_A, r_B)$ bounds. & Zero ray-leak holes during rotation. \\
-\textbf{W5} & Data I/O & Integrate \texttt{trx-rs}, load \texttt{.trx} geometry and \texttt{dpv}/\texttt{dps} tables into GPU buffers. & Successful import of HCP bundle. \\
-\textbf{W6} & UI & Build \texttt{egui} attribute transfer panel (range sliders, attribute selector). & Real-time interactive radius scaling. \\
-\textbf{W7} & Opacity \& Stretch & Implement S1 (confidence opacity) and C1 (GPU volume sampling prototype). & Dynamic bundle fading \& tumor probe. \\
+\textbf{W2} & Scoping & Mathematical derivation of rounded cone intersector; scoping document. & Approved scoping document \& repo. \\
+\textbf{W3} & TRX Parser & Integrate \texttt{trx-rs} into \texttt{src/file/line.rs}, parse positions, offsets, \texttt{dpv}/\texttt{dps}. & Automated tests loading HCP bundles. \\
+\textbf{W4} & Cone Shader & Implement \texttt{cone\_intersection} in \texttt{intersect.wgsl} using synthetic radii. & Crack-free render on test helix. \\
+\textbf{W5} & Voxel Grid & Update \texttt{voxelize.wgsl} for $\max(r_A, r_B)$ bounds; connect TRX radius buffer. & Zero ray-leak holes during rotation. \\
+\textbf{W6} & UI \& Opacity & Build \texttt{egui} radius/opacity mapping panel; stochastic alpha modulation. & Real-time interactive attribute scaling. \\
+\textbf{W7} & Color \& Polish & Implement multi-channel colormapping (S2) and endpoint tapering (S3). & Polished rendering across all bundles. \\
 \textbf{W8} & Evaluation & Performance benchmarking, visual before/after captures, final report/video. & Final project report and code PR. \\
 \bottomrule
 \end{tabularx}
@@ -189,7 +194,7 @@ $\swarrow$ & & $\searrow$ \\
 \label{tab:timeline}
 \end{table}
 
-\section{Team Roles and Workload Distribution}
+\section{Team Roles and Workload Distribution (3 Persons)}
 \label{sec:roles}
 
 The workload is partitioned cleanly across three independent architectural layers (\Cref{tab:roles}), ensuring that no team member is blocked by another and work distribution is strictly balanced ($33.3\%$ per student).
@@ -203,23 +208,23 @@ The workload is partitioned cleanly across three independent architectural layer
 \midrule
 \textbf{Student 1\newline(Graphics / Shaders)} & WGSL Ray Tracing \& Geometric Primitives & 
 \begin{itemize}[leftmargin=*,nosep]
-    \item Truncated cone intersection in \texttt{intersect.wgsl}
-    \item Analytical normal vectors and shading integration
-    \item Radius-aware voxelization in \texttt{voxelize.wgsl}
+    \item Rounded cone intersection in \texttt{intersect.wgsl}
+    \item Analytical normal vectors and tilted PBR shading
+    \item Radius-aware bounding slabs in \texttt{voxelize.wgsl}
 \end{itemize} & 33.3\% \\
 \midrule
 \textbf{Student 2\newline(Systems / Engine)} & Data Architecture \& Pipeline Integration & 
 \begin{itemize}[leftmargin=*,nosep]
     \item \texttt{trx-rs} integration in \texttt{src/file/line.rs}
-    \item Internal unified multi-attribute tractogram struct
-    \item GPU buffer allocation, streaming, and alignment
+    \item Internal unified Tractogram data model
+    \item GPU vertex/attribute buffer streaming (\texttt{bytemuck})
 \end{itemize} & 33.3\% \\
 \midrule
-\textbf{Student 3\newline(UI / Interaction / QA)} & Frontend Controls, Prototyping \& Evaluation & 
+\textbf{Student 3\newline(UI / Interaction / QA)} & Frontend Controls, Mapping \& Evaluation & 
 \begin{itemize}[leftmargin=*,nosep]
-    \item \texttt{egui} transfer function sliders and channel selection
-    \item Synthetic verification test suite (helix with varying $r$)
-    \item Frame time benchmarking and GPU volume sampling prototype
+    \item \texttt{egui} transfer panel (radius/opacity sliders)
+    \item Synthetic test suite (helix with known varying $r$)
+    \item Frame time profiling ($\ge 60\,\text{FPS}$) \& report visuals
 \end{itemize} & 33.3\% \\
 \bottomrule
 \end{tabularx}
@@ -227,12 +232,12 @@ The workload is partitioned cleanly across three independent architectural layer
 \label{tab:roles}
 \end{table}
 
-\section{Risk Analysis and Contingency Planning}
+\section{Risk Analysis and Mitigation}
 \label{sec:risks}
 
 \begin{itemize}[leftmargin=*]
-    \item \textbf{Risk 1: Numerical Precision in Conical Intersection.} At grazing angles or near-cylindrical segments ($r_A \approx r_B$), floating-point inaccuracies can produce black speckling artifacts. \emph{Mitigation:} We enforce an epsilon threshold ($\epsilon = 10^{-4}$): when $|r_A - r_B| < \epsilon$, the shader automatically falls back to standard cylinder evaluation.
-    \item \textbf{Risk 2: Development Bottlenecks Between Shaders and I/O.} The graphics specialist might wait for the file parser before testing. \emph{Mitigation:} Student 1 will test cone shaders using procedural radius generators (e.g., $r(t) = \sin(t)$ along a helix) and existing `.tsf` files, decoupling shader development completely from TRX ingestion.
+    \item \textbf{Risk 1: Numerical Precision in Conical Frustum.} Grazing rays near $r_A \approx r_B$ can trigger floating-point inaccuracies. \emph{Mitigation:} When $|r_A - r_B| < 10^{-4}$, the shader executes the fast, numerically stable capsule intersection path.
+    \item \textbf{Risk 2: Decoupled Development Workflow.} The shader specialist could be blocked waiting for TRX loading. \emph{Mitigation:} Student 1 tests cone shaders using procedural radii ($r(s) = \sin(\pi s)$) and existing \texttt{.tck} files, completely decoupling shader math from file I/O.
 \end{itemize}
 
 \bibliographystyle{plain}
