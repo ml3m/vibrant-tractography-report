@@ -12,7 +12,6 @@
 \usepackage{enumitem}
 \usepackage{tcolorbox}
 \usepackage{caption}
-\usepackage{subcaption}
 \usepackage[hidelinks,colorlinks=true,linkcolor=blue!70!black,citecolor=teal!70!black,urlcolor=blue!70!black]{hyperref}
 \usepackage{cleveref}
 
@@ -46,58 +45,46 @@
 
 \vspace{-0.2cm}
 \section{Motivation and Context}
-Vibrant \cite{kraaijeveld2024voxel} is an open-source tool for 3D brain anatomy and tractography that ray-traces streamlines using a coarse voxel grid. In the current version, Vibrant only loads legacy \texttt{.tck} files and draws all streamlines as uniform capsules of fixed radius ($r = \text{const}$) and uniform opacity (\Cref{fig:current_state}). This creates dense ``spaghetti clutter'' (\Cref{fig:hero}), occluding deep brain structures and preventing visual encoding of quantitative tract properties.
+Vibrant \cite{kraaijeveld2024voxel} is an open-source tool for 3D brain anatomy and tractography that ray-traces streamlines using a coarse voxel grid acceleration structure. In the baseline version, Vibrant only loads legacy \texttt{.tck} files and renders all streamlines as uniform capsules of fixed radius ($r = \text{const}$) and uniform opacity. This produces dense visual clutter (``spaghetti clutter''), occluding deep white-matter pathways and preventing quantitative visual encoding of per-vertex or per-streamline biological properties.
+
+To address this challenge, our project replaces constant-radius capsules with \textbf{variable-thickness rounded cones} with spherical endcaps (\Cref{fig:cones_concept}), implementing the geometric formulation established by Gro\ss{} and Gumhold \cite{gross2021advanced}. Rounded cones support continuous radius variation along streamlines, smoothly filling segment junctions while cleanly clipping internal overlap geometry to prevent rendering artifacts under transparency.
 
 \begin{figure}[ht!]
     \centering
-    \begin{subfigure}[b]{0.47\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{figures/vibrant-ui.png}
-        \caption{Current state: Constant-radius streamline capsules.}
-        \label{fig:current_state}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[b]{0.47\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{figures/hero.png}
-        \caption{Whole-brain tractogram: Uniform thickness causes severe occlusion.}
-        \label{fig:hero}
-    \end{subfigure}
-    \vspace{-0.2cm}
-    \caption{Baseline tractography in Vibrant. All fibers share a single global radius parameter.}
-    \label{fig:baseline}
+    \includegraphics[width=0.72\textwidth]{figures/cones.png}
+    \caption{The rounded cone primitive concept from Gro\ss{} and Gumhold \cite{gross2021advanced}. \emph{Top:} Without clipping internal geometry, overlapping spherical caps produce visible sphere artifacts during transparent rendering (left); clipping planes remove internal overlaps to yield smoothly connected tubes (right). \emph{Bottom:} Geometric definition of a streamline segment between $\mathbf{x}_1$ and $\mathbf{x}_2$ with preceding point $\mathbf{x}_0$ and succeeding point $\mathbf{x}_3$, and clipping plane normals $\vec{n}_0$ and $\vec{n}_1$.}
+    \label{fig:cones_concept}
 \end{figure}
 
-\vspace{-0.3cm}
-\noindent \textbf{Our Proposed Solution:}
-We adopt the \textbf{TRX format} \cite{trxformat} to load streamline geometry alongside per-vertex (\texttt{dpv}) and per-streamline (\texttt{dps}) scalars (e.g., Fractional Anisotropy, SIFT2 weights, length). We then use these attributes to feed:
+\vspace{-0.2cm}
+\noindent \textbf{Our Proposed Solution:}\newline
+We integrate the modern \textbf{TRX format} \cite{trxformat} to load streamline geometry alongside per-vertex (\texttt{dpv}) and per-streamline (\texttt{dps}) scalar tables (e.g., Fractional Anisotropy, SIFT2 bundle weights, streamline length). We route these attributes into three visual channels:
 \begin{enumerate}[leftmargin=*,nosep]
-    \item \textbf{Varying Tube Thickness:} Ray-casting truncated cones with spherical end caps (Gro\ss{} \& Gumhold \cite{gross2021advanced}) so fibers taper organically at cortical tips and swell in dense bundles.
-    \item \textbf{Varying Opacity:} Fading low-confidence fibers into semi-transparent lines to reveal core pathways.
-    \item \textbf{Varying Color:} Colormapping scalars or direct RGB channels.
+    \item \textbf{Varying Tube Thickness:} Ray-casting truncated cones with spherical endcaps (Gro\ss{} \& Gumhold \cite{gross2021advanced}) so fibers taper organically toward cortical terminations and widen in high-density bundle cores.
+    \item \textbf{Varying Opacity:} Modulating streamline transparency based on scalar confidence values to de-clutter periphery fibers and reveal deep pathways.
+    \item \textbf{Varying Color:} Colormapping quantitative scalars (or direct RGB values) across custom palettes.
 \end{enumerate}
 
-\section{Requirements (MoSCoW)}
+\section{Project Requirements and Scope}
 \begin{table}[ht!]
 \centering
 \small
-\begin{tabularx}{\textwidth}{l p{4.6cm} X p{3.5cm}}
+\begin{tabularx}{\textwidth}{l p{4.6cm} X p{3.6cm}}
 \toprule
-\textbf{Priority} & \textbf{Feature} & \textbf{Technical Scope} & \textbf{Acceptance Criteria} \\
+\textbf{Tier} & \textbf{Feature} & \textbf{Technical Scope} & \textbf{Acceptance Criteria} \\
 \midrule
-\textbf{Must-Have} & \textbf{M1: TRX Ingestion (\texttt{trx-rs})} & Load \texttt{.trx} files (geometry + \texttt{dpv}/\texttt{dps} tables) into a unified Tractogram model (keeping \texttt{.tck}/\texttt{.tsf} support). & Loads official reference bundles (AF, CST) and extracts attributes. \\
-\textbf{Must-Have} & \textbf{M2: Rounded Cones (WGSL)} & Ray-cast truncated cones with spherical end caps ($P_A, r_A \to P_B, r_B$) with tilted analytical normals. & Smooth joints without cracks; correct highlights under PBR lighting. \\
-\textbf{Must-Have} & \textbf{M3: Radius-Aware Voxel Grid} & Update \texttt{voxelize.wgsl} to bound segments by $r_{\max} = \max(r_A, r_B)$ in the voxel acceleration structure. & Zero ray-leak holes during interactive 3D rotation at 100k lines. \\
-\textbf{Must-Have} & \textbf{M4: Interactive Mapping UI} & \texttt{egui} sliders mapping scalar attributes to physical radius $[r_{\min}, r_{\max}]$ in mm. & Real-time update ($< 16\,\text{ms}$) on slider change without geometry re-upload. \\
+\textbf{Core} & \textbf{R1: TRX Ingestion (\texttt{trx-rs})} & Ingest \texttt{.trx} files (geometry + \texttt{dpv}/\texttt{dps} tables) into a unified Tractogram model (preserving \texttt{.tck}/\texttt{.tsf} compatibility). & Loads official benchmark bundles (AF, CST) and extracts attributes. \\
+\textbf{Core} & \textbf{R2: Rounded Cones (WGSL)} & Ray-cast truncated cones with spherical endcaps ($\mathbf{x}_1, r_1 \to \mathbf{x}_2, r_2$) with analytical surface normals and junction clipping planes $\vec{n}_0, \vec{n}_1$. & Crack-free joints without interior overlap artifacts; valid PBR highlights. \\
+\textbf{Core} & \textbf{R3: Radius-Aware Voxel Grid} & Extend \texttt{voxelize.wgsl} bounding slabs to $r_{\max} = \max(r_1, r_2)$ within the voxel acceleration grid. & Zero ray-leak holes during continuous 3D camera rotation at 100k lines. \\
+\textbf{Core} & \textbf{R4: Interactive Mapping UI} & Immediate-mode \texttt{egui} panel mapping scalar attributes to physical radius $[r_{\min}, r_{\max}]$ in mm. & Real-time update ($< 16\,\text{ms}$) on slider drag without geometry re-upload. \\
 \midrule
-\textbf{Should-Have} & \textbf{S1: Varying Opacity} & Map confidence scalars to stochastic transparency/thresholding. & Low-confidence fibers fade smoothly; interactive de-cluttering. \\
-\textbf{Should-Have} & \textbf{S2: Varying Color} & Route scalar attributes through custom colormaps or RGB data. & Multi-attribute visual distinction. \\
-\textbf{Should-Have} & \textbf{S3: Tip Tapering} & Procedural tapering of endpoints toward zero radius at cortex. & Natural anatomical bundle terminations. \\
-\midrule
-\textbf{Could-Have} & \textbf{C1: 3D Volume Sampling} & Compute pass sampling 3D NIfTI volumes at vertices live. & Fibers dynamically adapt color/radius near tumor/lesion masks. \\
+\textbf{Extension} & \textbf{E1: Varying Opacity} & Map confidence scalars to stochastic transparency/thresholding. & Low-confidence fibers fade smoothly; interactive de-cluttering. \\
+\textbf{Extension} & \textbf{E2: Varying Color} & Route scalar attributes through custom colormaps or RGB tables. & Multi-attribute visual distinction across tract bundles. \\
+\textbf{Extension} & \textbf{E3: Tip Tapering} & Procedural tapering of streamline endpoints toward zero radius at cortex. & Anatomically natural tract bundle terminations. \\
 \bottomrule
 \end{tabularx}
-\caption{Prioritized project requirements with concrete acceptance criteria.}
+\caption{Project requirements and concrete acceptance criteria structured by core deliverables and extensions.}
+\label{tab:requirements}
 \end{table}
 
 \section{Technical Architecture and Justification}
@@ -112,6 +99,7 @@ We adopt the \textbf{TRX format} \cite{trxformat} to load streamline geometry al
 
 \noindent \textbf{Data Sources:} We evaluate on official HCP benchmark bundles (Arcuate Fasciculus, Corticospinal Tract) provided in \texttt{.trx} and legacy \texttt{.tck} format, alongside procedurally generated mathematical helices with continuous radius functions ($r(s) = \sin(\pi s)$) for automated regression testing.
 
+\vspace{0.1cm}
 \noindent \textbf{Pipeline Architecture:} The data flows from files into a unified model, feeding GPU buffers and shaders:
 \begin{center}
 \small
@@ -122,17 +110,28 @@ $\downarrow$\\
 \textbf{Unified Tractogram (Rust):} Positions, Offsets, \texttt{dpv}/\texttt{dps} Tables\\
 $\Big\downarrow$ \emph{Interactive Mapping Layer (\texttt{egui}): Radius $[r_{\min}, r_{\max}]$, Opacity $\alpha$, Color}\\
 \textbf{GPU Buffer Streaming:} Packed Vertex Buffer $(\mathbf{p}, r_v, \alpha_v)$\\
-$\swarrow$ \hspace{5cm} $\searrow$\\
-\textbf{Voxelization (\texttt{voxelize.wgsl}):} Slab $\max(r_A, r_B)$ \hspace{1cm} \textbf{Ray Tracing (\texttt{trace.wgsl}):} Rounded Cones
+$\swarrow$ \hspace{4.2cm} $\searrow$\\
+\textbf{Voxelization (\texttt{voxelize.wgsl}):} Slab $\max(r_1, r_2)$ \hspace{0.8cm} \textbf{Ray Tracing (\texttt{trace.wgsl}):} Rounded Cone
 \end{tcolorbox}
 \end{center}
 
-\noindent \textbf{Rounded Cone Math:} For a segment connecting $P_A(r_A)$ to $P_B(r_B)$ with length $L = \|P_B - P_A\|$, the cone opening half-angle is $\sin \alpha = (r_A - r_B)/L$. The ray intersection solves the cone quadratic $at^2 + 2bt + c = 0$ bounded between tangent circles, plus the two spherical end caps (Gro\ss{} \& Gumhold \cite{gross2021advanced}). The surface normal is tilted by $\alpha$ along the segment axis. When $|r_A - r_B| < 10^{-4}$, the shader executes the fast cylinder fallback. Conservative voxelization bounds each segment by $r_{\max} = \max(r_A, r_B)$, preserving Kraaijeveld et al.'s \cite{kraaijeveld2024voxel} prefix-sum compaction with zero ray-leak holes.
+\noindent \textbf{Mathematical Formulation (Gro\ss{} \& Gumhold \cite{gross2021advanced}):}
+A streamline segment is defined by start position $\mathbf{x}_1$ with radius $r_1$ and end position $\mathbf{x}_2$ with radius $r_2$. The segment centerline direction is $\mathbf{d} = \mathbf{x}_2 - \mathbf{x}_1$, with segment length $L = \|\mathbf{d}\|$. The half opening angle $\alpha$ of the conical frustum is defined by:
+\begin{equation}
+\sin \alpha = \frac{r_1 - r_2}{L}
+\end{equation}
+The ray intersection is computed analytically by testing against the conical frustum bounded by tangent circles, plus the two spherical endcaps of radii $r_1$ at $\mathbf{x}_1$ and $r_2$ at $\mathbf{x}_2$. The surface normal $\mathbf{n}$ is tilted by angle $\alpha$ along the segment axis $\mathbf{d}$. When $|r_1 - r_2| < 10^{-4}$, the shader executes a fast cylinder fallback.
+
+To eliminate internal sphere artifacts at segment junctions when rendering transparent lines (\Cref{fig:cones_concept}), we evaluate the cap clipping planes formulated by Gro\ss{} and Gumhold \cite{gross2021advanced} (Eq. 11). Given preceding vertex $\mathbf{x}_0$ and succeeding vertex $\mathbf{x}_3$ along the streamline, the clipping plane normals at $\mathbf{x}_1$ and $\mathbf{x}_2$ are:
+\begin{equation}
+\vec{n}_0 = -\frac{\mathbf{x}_2 - \mathbf{x}_0}{\|\mathbf{x}_2 - \mathbf{x}_0\|} \qquad \text{and} \qquad \vec{n}_1 = +\frac{\mathbf{x}_3 - \mathbf{x}_1}{\|\mathbf{x}_3 - \mathbf{x}_1\|}
+\end{equation}
+During ray-primitive intersection, a candidate surface point $\mathbf{p}$ is accepted if and only if it lies between the two clipping planes: $(\mathbf{p} - \mathbf{x}_1) \cdot \vec{n}_0 \ge 0$ and $(\mathbf{p} - \mathbf{x}_2) \cdot \vec{n}_1 \ge 0$. Streamline start and end vertices retain their exterior spherical caps. For the spatial acceleration structure, \texttt{voxelize.wgsl} bounds each segment by a conservative slab radius $r_{\max} = \max(r_1, r_2)$, preserving prefix-sum compaction with zero ray leaks.
 
 \section{Team Roles and 8-Week Timeline}
 The workload is split equitably ($33.3\%$ each) across three non-overlapping layers:
 \begin{itemize}[leftmargin=*,nosep]
-    \item \textbf{Student 1 (Graphics / Shaders):} WGSL rounded cone ray intersection (\texttt{intersect.wgsl}), analytical surface normals, and radius-aware voxelization (\texttt{voxelize.wgsl}).
+    \item \textbf{Student 1 (Graphics / Shaders):} WGSL rounded cone ray intersection (\texttt{intersect.wgsl}), analytical surface normals, clipping planes ($\vec{n}_0, \vec{n}_1$), and radius-aware voxelization (\texttt{voxelize.wgsl}).
     \item \textbf{Student 2 (Systems / Engine):} \texttt{trx-rs} integration in \texttt{src/file/line.rs}, in-memory Tractogram data structures, and GPU vertex buffer packing.
     \item \textbf{Student 3 (UI / Interaction / QA):} \texttt{egui} transfer panel (radius/opacity sliders), synthetic test suite (helix with varying $r$), and 60+ FPS benchmarking.
 \end{itemize}
@@ -146,13 +145,14 @@ The workload is split equitably ($33.3\%$ each) across three non-overlapping lay
 \midrule
 \textbf{W1--W2} & Setup \& Scoping & Environment setup, math derivation, scoping document. & Approved scoping document. \\
 \textbf{W3--W4} & Core Shaders \& TRX & Implement \texttt{cone\_intersection}; integrate \texttt{trx-rs} archive loader. & Crack-free cone render on test helix. \\
-\textbf{W5} & Voxel Acceleration & Update \texttt{voxelize.wgsl} for $\max(r_A, r_B)$; pack GPU attribute buffer. & Zero ray-leak holes during rotation. \\
+\textbf{W5} & Voxel Acceleration & Update \texttt{voxelize.wgsl} for $\max(r_1, r_2)$; pack GPU attribute buffer. & Zero ray-leak holes during rotation. \\
 \textbf{W6} & UI \& Opacity & \texttt{egui} radius/opacity mapping panel; stochastic alpha modulation. & Real-time interactive attribute scaling. \\
 \textbf{W7} & Color \& Polish & Multi-channel colormapping, cortical endpoint tapering. & Polished rendering across all bundles. \\
 \textbf{W8} & Evaluation & Performance benchmarking ($\ge 60\,\text{FPS}$), final presentation \& report. & Final code PR and report. \\
 \bottomrule
 \end{tabularx}
 \caption{8-week project milestone schedule.}
+\label{tab:schedule}
 \end{table}
 
 \vspace{-0.3cm}
