@@ -100,16 +100,26 @@ We adopt the \textbf{TRX format} \cite{trxformat} to load streamline geometry al
 \caption{Prioritized project requirements with concrete acceptance criteria.}
 \end{table}
 
-\section{Technical Architecture}
+\section{Technical Architecture and Justification}
 
-\noindent \textbf{Pipeline:} The data flows from files into a unified model, which feeds GPU buffers and shaders:
+\noindent \textbf{Technology Stack Justification:}
+\begin{itemize}[leftmargin=*,nosep]
+    \item \textbf{Rust \& Cargo:} Native engine language of Vibrant; guarantees zero-cost memory safety, multithreading, and seamless cross-compilation for desktop and WebAssembly.
+    \item \textbf{WebGPU \& WGSL via \texttt{wgpu}:} Modern GPU API providing compute and fragment shaders with identical behavior across macOS (Metal), Windows (DirectX 12/Vulkan), and Linux.
+    \item \textbf{\texttt{trx-rs} Crate:} Official community Rust implementation of the TRX standard, eliminating custom binary parsing bugs and enabling memory-mapped array access.
+    \item \textbf{\texttt{egui}:} Immediate-mode GUI allowing real-time parameter tweaking with zero state synchronization lag.
+\end{itemize}
+
+\noindent \textbf{Data Sources:} We evaluate on official HCP benchmark bundles (Arcuate Fasciculus, Corticospinal Tract) provided in \texttt{.trx} and legacy \texttt{.tck} format, alongside procedurally generated mathematical helices with continuous radius functions ($r(s) = \sin(\pi s)$) for automated regression testing.
+
+\noindent \textbf{Pipeline Architecture:} The data flows from files into a unified model, feeding GPU buffers and shaders:
 \begin{center}
 \small
 \begin{tcolorbox}[colback=white,colframe=bordergray]
 \centering
-\texttt{.trx} (via \texttt{trx-rs}) \quad / \quad \texttt{.tck} + \texttt{.tsf}
-$\quad\longrightarrow\quad$
-\textbf{Unified Tractogram (Rust):} Positions, Offsets, \texttt{dpv}/\texttt{dps}\\
+\texttt{.trx} (via \texttt{trx-rs}) \quad / \quad \texttt{.tck} + \texttt{.tsf} \quad / \quad Synthetic Test Tracts\\
+$\downarrow$\\
+\textbf{Unified Tractogram (Rust):} Positions, Offsets, \texttt{dpv}/\texttt{dps} Tables\\
 $\Big\downarrow$ \emph{Interactive Mapping Layer (\texttt{egui}): Radius $[r_{\min}, r_{\max}]$, Opacity $\alpha$, Color}\\
 \textbf{GPU Buffer Streaming:} Packed Vertex Buffer $(\mathbf{p}, r_v, \alpha_v)$\\
 $\swarrow$ \hspace{5cm} $\searrow$\\
@@ -117,7 +127,7 @@ $\swarrow$ \hspace{5cm} $\searrow$\\
 \end{tcolorbox}
 \end{center}
 
-\noindent \textbf{Rounded Cone Math:} For a segment connecting $P_A(r_A)$ to $P_B(r_B)$ with length $L = \|P_B - P_A\|$, the cone opening half-angle is $\sin \alpha = (r_A - r_B)/L$. The ray intersection solves the cone quadratic $at^2 + 2bt + c = 0$ bounded between tangent circles, plus the two spherical end caps. The surface normal is tilted by $\alpha$ along the segment axis. When $|r_A - r_B| < 10^{-4}$, the shader executes the fast cylinder fallback.
+\noindent \textbf{Rounded Cone Math:} For a segment connecting $P_A(r_A)$ to $P_B(r_B)$ with length $L = \|P_B - P_A\|$, the cone opening half-angle is $\sin \alpha = (r_A - r_B)/L$. The ray intersection solves the cone quadratic $at^2 + 2bt + c = 0$ bounded between tangent circles, plus the two spherical end caps (Gro\ss{} \& Gumhold \cite{gross2021advanced}). The surface normal is tilted by $\alpha$ along the segment axis. When $|r_A - r_B| < 10^{-4}$, the shader executes the fast cylinder fallback. Conservative voxelization bounds each segment by $r_{\max} = \max(r_A, r_B)$, preserving Kraaijeveld et al.'s \cite{kraaijeveld2024voxel} prefix-sum compaction with zero ray-leak holes.
 
 \section{Team Roles and 8-Week Timeline}
 The workload is split equitably ($33.3\%$ each) across three non-overlapping layers:
